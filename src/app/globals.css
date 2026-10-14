@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/*
+  Тёплая, простая палитра: бумага, латте, кофе. Без градиентов и «глянца».
+*/
+@theme {
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-cream: #fbf7f2;
+  --color-sand: #f6efe6;
+  --color-card: #ffffff;
+  --color-cream-deep: #f2e8da;
+  --color-latte: #e9dccb;
+  --color-line: #e5d7c6;
+
+  --color-ink: #2b2118;
+  --color-ink-soft: #6f5e4e;
+
+  --color-coffee: #8a4b2a;
+  --color-coffee-dark: #6d3817;
+  --color-success: #3f7d52;
+  --color-danger: #b23f2b;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 4.75rem;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: var(--color-latte);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-coffee);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  input,
+  textarea,
+  button,
+  select {
+    font: inherit;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

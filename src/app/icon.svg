@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="кварта">
+  <rect width="64" height="64" rx="16" fill="#8a4b2a" />
+  <g transform="rotate(-18 32 32)">
+    <ellipse cx="32" cy="32" rx="16" ry="21" fill="#f2e8da" />
+    <path
+      d="M32 13c-7.5 11-7.5 27 0 38"
+      fill="none"
+      stroke="#8a4b2a"
+      stroke-width="4.5"
+      stroke-linecap="round"
+    />
+  </g>
+</svg>

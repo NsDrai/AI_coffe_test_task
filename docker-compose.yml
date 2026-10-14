@@ -1,0 +1,30 @@
+# Локальная MySQL для разработки: docker compose up -d
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: kvarta-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: kvarta
+      MYSQL_USER: kvarta
+      MYSQL_PASSWORD: kvarta
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      # Наружу отдаём 13306: локальный MySQL обычно уже занял 3306
+      - "13306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # Схема накатывается при первом запуске контейнера
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  mysql-data:
