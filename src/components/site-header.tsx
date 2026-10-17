@@ -21,7 +21,7 @@ export function SiteHeader() {
   }, [open]);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-line/80 bg-cream/90 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-line bg-cream">
       <a
         href="#order"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 focus:rounded-full focus:bg-coffee focus:px-4 focus:py-2 focus:text-sm focus:text-cream"
@@ -78,39 +78,55 @@ export function SiteHeader() {
         </div>
       </div>
 
+      {/*
+        Плашка мобильного меню: лежит под шапкой и выезжает из-под неё.
+        Обёртка обрезает содержимое строго по нижней кромке шапки
+        (top-full + overflow-hidden), поэтому в закрытом виде панель
+        уезжает именно «за» шапку, а не раскрывается в потоке.
+        inert убирает закрытые ссылки из фокуса и со скринридеров.
+      */}
       <div
         id="mobile-navigation"
-        hidden={!open}
-        className="border-t border-line bg-cream md:hidden"
+        inert={!open}
+        className={`absolute inset-x-0 top-full overflow-hidden md:hidden ${
+          open ? "" : "pointer-events-none"
+        }`}
       >
-        <nav aria-label="Навигация по разделам" className="mx-auto w-full max-w-5xl px-4 py-3">
-          <ul className="divide-y divide-line/70">
-            {NAV_LINKS.map((link) => (
-              <li key={link.href}>
-                <a
-                  href={link.href}
-                  onClick={() => setOpen(false)}
-                  className="block py-3.5 text-base font-medium text-ink"
-                >
-                  {link.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-3 flex flex-col gap-2">
-            <a
-              href={SITE.phoneLink}
-              className="rounded-2xl border border-line bg-sand px-4 py-3 text-center text-sm font-semibold text-ink"
-            >
-              {SITE.phoneLabel}
-            </a>
-            <a
-              href="#order"
-              onClick={() => setOpen(false)}
-              className="rounded-2xl bg-coffee px-4 py-3 text-center text-sm font-semibold text-cream"
-            >
-              Оставить заявку
-            </a>
+        <nav
+          aria-label="Навигация по разделам"
+          className={`bg-cream py-3 shadow-[0_18px_40px_-24px_rgba(43,33,24,0.5)] border-b border-line transition-transform duration-300 ease-out ${
+            open ? "translate-y-0" : "-translate-y-full"
+          }`}
+        >
+          <div className="mx-auto w-full max-w-5xl px-4">
+            <ul className="divide-y divide-line/70">
+              {NAV_LINKS.map((link) => (
+                <li key={link.href}>
+                  <a
+                    href={link.href}
+                    onClick={() => setOpen(false)}
+                    className="block py-3.5 text-base font-medium text-ink"
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 flex flex-col gap-2">
+              <a
+                href={SITE.phoneLink}
+                className="rounded-2xl border border-line bg-sand px-4 py-3 text-center text-sm font-semibold text-ink"
+              >
+                {SITE.phoneLabel}
+              </a>
+              <a
+                href="#order"
+                onClick={() => setOpen(false)}
+                className="rounded-2xl bg-coffee px-4 py-3 text-center text-sm font-semibold text-cream"
+              >
+                Оставить заявку
+              </a>
+            </div>
           </div>
         </nav>
       </div>
