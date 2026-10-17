@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 import { Section } from "@/components/section";
 import { SITE } from "@/lib/site";
 
@@ -15,9 +17,27 @@ export function AboutSection() {
       eyebrow={`Мастерская «${SITE.brand}» · ${SITE.city}`}
       headingLevel={1}
       title="Обжариваем кофе в Минске — маленькими партиями, по четвергам"
-      description="Мы — Аня и Дмитрий. Оба много лет проработали бариста и хорошо знаем, как обидно открыть свежую на вид пачку, а внутри — плоский, бумажный вкус. Поэтому в 2019 году открыли свою маленькую мастерскую и сами встали к ростору."
     >
-      <div className="grid gap-4 md:grid-cols-2 md:gap-6">
+      <figure>
+        <Image
+          src="/images/owners.png"
+          alt="Аня и Дмитрий — основатели мастерской обжарки кофе «кварта»"
+          width={1664}
+          height={928}
+          className="h-auto w-full rounded-3xl border border-line object-cover"
+        />
+        <figcaption className="mt-2 text-sm text-ink-soft">
+          Аня и Дмитрий — основатели мастерской
+        </figcaption>
+      </figure>
+
+      <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-ink-soft sm:text-base">
+        Мы — Аня и Дмитрий. Оба много лет проработали бариста и хорошо знаем, как обидно
+        открыть свежую на вид пачку, а внутри — плоский, бумажный вкус. Поэтому в 2019
+        году открыли свою маленькую мастерскую и сами встали к ростору.
+      </p>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2 md:gap-6">
         <div className="rounded-3xl border border-line bg-card p-5 sm:p-6">
           <h2 className="text-lg font-bold text-ink">
             Свежесть — то, что мы на самом деле продаём

@@ -241,3 +241,24 @@ export function CloseIcon({ className, ...props }: IconProps) {
     </svg>
   );
 }
+
+export function AlertIcon({ className, ...props }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      className={className}
+      {...props}
+    >
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5v5.25" />
+      <circle cx="12" cy="16.1" r="0.75" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}

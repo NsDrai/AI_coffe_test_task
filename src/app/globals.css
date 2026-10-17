@@ -20,6 +20,8 @@
   --color-coffee-dark: #6d3817;
   --color-success: #3f7d52;
   --color-danger: #b23f2b;
+
+  --animate-toast-in: toast-in 200ms ease-out both;
 }
 
 @layer base {
@@ -64,5 +66,17 @@
   *::after {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
