@@ -1,114 +1,110 @@
-import mysql, { type Pool, type PoolOptions } from "mysql2/promise";
+import { Pool, type PoolConfig } from "pg";
 
 /**
  * Таблица заявок. Держите это описание синхронным с `db/schema.sql`:
- * там та же схема + создание базы для ручного деплоя.
+ * там та же схема + комментарии для ручного деплоя.
  */
-const CREATE_TABLE_SQL = `
+const CREATE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS leads (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   name VARCHAR(120) NOT NULL,
   phone VARCHAR(24) NOT NULL,
   interests VARCHAR(255) NOT NULL DEFAULT '',
-  note TEXT NULL,
-  utm_source VARCHAR(190) NULL,
-  utm_medium VARCHAR(190) NULL,
-  utm_campaign VARCHAR(190) NULL,
-  utm_content VARCHAR(190) NULL,
-  utm_term VARCHAR(190) NULL,
-  click_id VARCHAR(190) NULL,
-  click_id_type VARCHAR(32) NULL,
-  referrer VARCHAR(700) NULL,
-  landing_page VARCHAR(700) NULL,
-  page_url VARCHAR(700) NULL,
-  user_agent VARCHAR(500) NULL,
-  ip VARCHAR(64) NULL,
+  note TEXT,
+  utm_source VARCHAR(190),
+  utm_medium VARCHAR(190),
+  utm_campaign VARCHAR(190),
+  utm_content VARCHAR(190),
+  utm_term VARCHAR(190),
+  click_id VARCHAR(190),
+  click_id_type VARCHAR(32),
+  referrer VARCHAR(700),
+  landing_page VARCHAR(700),
+  page_url VARCHAR(700),
+  user_agent VARCHAR(500),
+  ip VARCHAR(64),
   status VARCHAR(24) NOT NULL DEFAULT 'new',
-  status_changed_at DATETIME NULL,
-  status_changed_by VARCHAR(64) NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  KEY idx_status_created (status, created_at),
-  KEY idx_created (created_at),
-  KEY idx_utm_source (utm_source(64)),
-  KEY idx_phone (phone)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  status_changed_at TIMESTAMPTZ,
+  status_changed_by VARCHAR(64),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_status_created ON leads (status, created_at);
+CREATE INDEX IF NOT EXISTS idx_created ON leads (created_at);
+CREATE INDEX IF NOT EXISTS idx_utm_source ON leads (utm_source);
+CREATE INDEX IF NOT EXISTS idx_phone ON leads (phone);
 `;
 
 let pool: Pool | undefined;
 let schemaPromise: Promise<void> | undefined;
 
-function poolOptionsFromUrl(rawUrl: string): PoolOptions {
-  const url = new URL(rawUrl);
-  const database = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+/**
+ * Локальной базе TLS не нужен, а облачные (Neon, Supabase, RDS) без него
+ * обычно не пускают. Явно управляется переменной POSTGRES_SSL.
+ */
+const LOCAL_HOSTS = new Set(["", "localhost", "127.0.0.1", "::1", "0.0.0.0"]);
 
-  if (!database) {
-    throw new Error("В DATABASE_URL не указано имя базы данных");
-  }
+function wantsSsl(host: string): boolean {
+  const flag = process.env.POSTGRES_SSL?.trim().toLowerCase();
+  if (flag) return !["false", "disable", "off", "0"].includes(flag);
 
-  return {
-    host: url.hostname,
-    port: url.port ? Number(url.port) : 3306,
-    user: decodeURIComponent(url.username),
-    password: decodeURIComponent(url.password),
-    database,
-  };
+  return !LOCAL_HOSTS.has(host.toLowerCase());
 }
 
-function readPoolOptions(): PoolOptions {
-  const base: PoolOptions = {
-    waitForConnections: true,
-    connectionLimit: Number(process.env.MYSQL_POOL_SIZE || 5),
-    maxIdle: Number(process.env.MYSQL_POOL_SIZE || 5),
-    idleTimeout: 60_000,
-    queueLimit: 0,
-    charset: "utf8mb4_unicode_ci",
-    // Время в базе — UTC, в ответах API — ISO-строки.
-    timezone: "Z",
-    enableKeepAlive: true,
+function readPoolConfig(): PoolConfig {
+  const url = process.env.DATABASE_URL?.trim() || process.env.POSTGRES_URL?.trim();
+
+  const host = url
+    ? new URL(url).hostname
+    : process.env.PGHOST?.trim() || "127.0.0.1";
+
+  const config: PoolConfig = {
+    max: Number(process.env.POSTGRES_POOL_SIZE || 3),
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 10_000,
+    // Важно для serverless: не держать процесс живым из-за открытых соединений.
+    allowExitOnIdle: true,
+    application_name: "kvarta-landing",
   };
 
-  const url = process.env.DATABASE_URL?.trim() || process.env.MYSQL_URL?.trim();
   if (url) {
-    return { ...base, ...poolOptionsFromUrl(url) };
+    // Параметры вроде sslmode=require из строки подключения разбирает сам pg.
+    config.connectionString = url;
+  } else {
+    config.host = host;
+    config.port = Number(process.env.PGPORT || 5432);
+    config.user = process.env.PGUSER?.trim() || "postgres";
+    config.password = process.env.PGPASSWORD ?? "";
+    config.database = process.env.PGDATABASE?.trim() || "kvarta";
   }
 
-  return {
-    ...base,
-    host: process.env.MYSQL_HOST?.trim() || "127.0.0.1",
-    port: Number(process.env.MYSQL_PORT || 3306),
-    user: process.env.MYSQL_USER?.trim() || "root",
-    password: process.env.MYSQL_PASSWORD ?? "",
-    database: process.env.MYSQL_DATABASE?.trim() || "kvarta",
-    ssl: process.env.MYSQL_SSL === "true" ? { rejectUnauthorized: false } : undefined,
-  };
+  const sslModeInUrl = Boolean(url && /[?&]sslmode=/.test(url));
+  if (!sslModeInUrl && wantsSsl(host)) {
+    config.ssl = { rejectUnauthorized: false };
+  }
+
+  return config;
 }
 
 export function getPool(): Pool {
   if (!pool) {
-    pool = mysql.createPool(readPoolOptions());
-    pool.on("connection", (connection) => {
-      // Не зависим от таймзоны сервера MySQL.
-      (connection as unknown as { query: (sql: string) => void }).query(
-        "SET time_zone = '+00:00'",
-      );
-    });
+    pool = new Pool(readPoolConfig());
   }
 
   return pool;
 }
 
 /**
- * Создаёт таблицу при первом обращении. Идемпотентно и удобно для разработки;
- * в продакшене схему можно накатить заранее из db/schema.sql.
+ * Создаёт таблицу и индексы при первом обращении. Идемпотентно и удобно
+ * для разработки; в продакшене схему можно накатить заранее из db/schema.sql.
  * Отключается переменной DB_AUTO_MIGRATE=false.
  */
 export function ensureSchema(): Promise<void> {
   if (!schemaPromise) {
     schemaPromise = (async () => {
       if (process.env.DB_AUTO_MIGRATE === "false") return;
-      await getPool().query(CREATE_TABLE_SQL);
+      await getPool().query(CREATE_SCHEMA_SQL);
     })().catch((error: unknown) => {
       schemaPromise = undefined;
       throw error;

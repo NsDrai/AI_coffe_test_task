@@ -3,8 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
-  // mysql2 подгружает нативные модули динамически — не бандлим его на сервере
-  serverExternalPackages: ["mysql2"],
+  // pg тянет необязательный нативный модуль pg-native — не бандлим его на сервере
+  serverExternalPackages: ["pg"],
   turbopack: {
     rules: {
       "*.css": {

@@ -1,9 +1,9 @@
-import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { ensureSchema, getPool } from "./db";
 import { isLeadStatus, type Lead, type LeadInput, type LeadStatus, LEAD_STATUSES } from "./leads";
 
-type LeadRow = RowDataPacket & {
-  id: number | string;
+type LeadRow = {
+  /** BIGINT pg отдаёт строкой, чтобы не терять точность. */
+  id: string | number;
   name: string;
   phone: string;
   interests: string | null;
@@ -21,10 +21,10 @@ type LeadRow = RowDataPacket & {
   user_agent: string | null;
   ip: string | null;
   status: string;
-  status_changed_at: Date | null;
+  status_changed_at: Date | string | null;
   status_changed_by: string | null;
-  created_at: Date;
-  updated_at: Date | null;
+  created_at: Date | string;
+  updated_at: Date | string | null;
 };
 
 const COLUMNS = [
@@ -97,11 +97,12 @@ function mapRow(row: LeadRow): Lead {
 export async function createLead(input: LeadInput): Promise<Lead> {
   await ensureSchema();
 
-  const [result] = await getPool().execute<ResultSetHeader>(
+  const { rows } = await getPool().query<LeadRow>(
     `INSERT INTO leads
       (name, phone, interests, note, utm_source, utm_medium, utm_campaign, utm_content, utm_term,
        click_id, click_id_type, referrer, landing_page, page_url, user_agent, ip)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+     RETURNING ${COLUMNS}`,
     [
       input.name,
       input.phone,
@@ -122,19 +123,19 @@ export async function createLead(input: LeadInput): Promise<Lead> {
     ],
   );
 
-  const created = await getLeadById(result.insertId);
+  const created = rows[0];
   if (!created) {
-    throw new Error(`Заявка ${result.insertId} не нашлась сразу после вставки`);
+    throw new Error("PostgreSQL не вернул созданную заявку (INSERT ... RETURNING)");
   }
 
-  return created;
+  return mapRow(created);
 }
 
 export async function getLeadById(id: number): Promise<Lead | null> {
   await ensureSchema();
 
-  const [rows] = await getPool().query<LeadRow[]>(
-    `SELECT ${COLUMNS} FROM leads WHERE id = ? LIMIT 1`,
+  const { rows } = await getPool().query<LeadRow>(
+    `SELECT ${COLUMNS} FROM leads WHERE id = $1 LIMIT 1`,
     [id],
   );
 
@@ -147,7 +148,7 @@ export type ListLeadsParams = {
   offset: number;
   /** Только заявки с id больше указанного — удобно для опроса из бота. */
   afterId?: number;
-  /** Только заявки, созданные позже указанного момента (ISO-строка). */
+  /** Только заявки, созданные позже указанного момента. */
   since?: Date;
   order: "asc" | "desc";
 };
@@ -162,51 +163,56 @@ export async function listLeads(params: ListLeadsParams): Promise<ListLeadsResul
   await ensureSchema();
 
   const conditions: string[] = [];
-  const values: unknown[] = [];
+  const whereValues: unknown[] = [];
 
   if (params.status) {
-    conditions.push("status = ?");
-    values.push(params.status);
+    whereValues.push(params.status);
+    conditions.push(`status = $${whereValues.length}`);
   }
   if (params.afterId !== undefined) {
-    conditions.push("id > ?");
-    values.push(params.afterId);
+    whereValues.push(params.afterId);
+    conditions.push(`id > $${whereValues.length}`);
   }
   if (params.since) {
-    conditions.push("created_at > ?");
-    values.push(params.since);
+    whereValues.push(params.since);
+    conditions.push(`created_at > $${whereValues.length}`);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   const direction = params.order === "asc" ? "ASC" : "DESC";
 
   const pool = getPool();
+  // Нумерация $n сквозная по всему запросу, поэтому LIMIT/OFFSET идут следующими.
+  const limitPlaceholder = `$${whereValues.length + 1}`;
+  const offsetPlaceholder = `$${whereValues.length + 2}`;
 
-  const [rows] = await pool.query<LeadRow[]>(
-    `SELECT ${COLUMNS} FROM leads ${where} ORDER BY id ${direction} LIMIT ? OFFSET ?`,
-    [...values, params.limit, params.offset],
-  );
-
-  const [totalRows] = await pool.query<(RowDataPacket & { total: number | string })[]>(
-    `SELECT COUNT(*) AS total FROM leads ${where}`,
-    values,
-  );
-
-  // Разбивка по статусам считается по всем заявкам — удобно для сводки в боте.
-  const [countRows] = await pool.query<(RowDataPacket & { status: string; total: number | string })[]>(
-    "SELECT status, COUNT(*) AS total FROM leads GROUP BY status",
-  );
+  const [listResult, totalResult, countResult] = await Promise.all([
+    pool.query<LeadRow>(
+      `SELECT ${COLUMNS} FROM leads ${where} ORDER BY id ${direction} LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}`,
+      [...whereValues, params.limit, params.offset],
+    ),
+    // COUNT(*) — bigint; приводим к int, чтобы pg вернул число, а не строку.
+    pool.query<{ total: number }>(`SELECT COUNT(*)::int AS total FROM leads ${where}`, whereValues),
+    // Разбивка по статусам считается по всем заявкам — удобно для сводки в боте.
+    pool.query<{ status: string; total: number }>(
+      "SELECT status, COUNT(*)::int AS total FROM leads GROUP BY status",
+    ),
+  ]);
 
   const counts = Object.fromEntries(LEAD_STATUSES.map((status) => [status, 0])) as Record<
     LeadStatus,
     number
   >;
 
-  for (const row of countRows) {
+  for (const row of countResult.rows) {
     if (isLeadStatus(row.status)) counts[row.status] = Number(row.total);
   }
 
-  return { leads: rows.map(mapRow), total: Number(totalRows[0]?.total ?? 0), counts };
+  return {
+    leads: listResult.rows.map(mapRow),
+    total: Number(totalResult.rows[0]?.total ?? 0),
+    counts,
+  };
 }
 
 export async function updateLeadStatus(
@@ -216,14 +222,16 @@ export async function updateLeadStatus(
 ): Promise<Lead | null> {
   await ensureSchema();
 
-  const [result] = await getPool().execute<ResultSetHeader>(
+  const { rows } = await getPool().query<LeadRow>(
     `UPDATE leads
-        SET status = ?, status_changed_at = UTC_TIMESTAMP(), status_changed_by = ?
-      WHERE id = ?`,
+        SET status = $1,
+            status_changed_at = now(),
+            status_changed_by = $2,
+            updated_at = now()
+      WHERE id = $3
+      RETURNING ${COLUMNS}`,
     [status, changedBy ?? null, id],
   );
 
-  if (result.affectedRows === 0) return null;
-
-  return getLeadById(id);
+  return rows[0] ? mapRow(rows[0]) : null;
 }
