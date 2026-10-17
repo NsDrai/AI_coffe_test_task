@@ -31,7 +31,7 @@ export function AboutSection() {
         </figcaption>
       </figure>
 
-      <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-ink-soft sm:text-base">
+      <p className="mt-5 text-[15px] leading-relaxed text-ink-soft sm:text-base">
         Мы — Аня и Дмитрий. Оба много лет проработали бариста и хорошо знаем, как обидно
         открыть свежую на вид пачку, а внутри — плоский, бумажный вкус. Поэтому в 2019
         году открыли свою маленькую мастерскую и сами встали к ростору.

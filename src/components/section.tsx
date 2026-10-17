@@ -25,7 +25,7 @@ export function Section({
   return (
     <section id={id} aria-labelledby={`${id}-title`} className={`scroll-mt-20 ${className ?? ""}`}>
       <div className="mx-auto w-full max-w-5xl px-4 py-12 sm:px-6 sm:py-16">
-        <header className="max-w-2xl">
+        <header>
           {eyebrow ? (
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-coffee">{eyebrow}</p>
           ) : null}
